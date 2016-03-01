@@ -121,7 +121,7 @@ def test_create_sipp_instance():
     sipp = create_new_sipp_instance()
     sipp2 = fetch_sipp_instance(sipp['uuid'])
     assert_value(sipp['uuid'], sipp2['uuid'])
-    
+
     
 def test_set_target_rate():
     print_test_name()

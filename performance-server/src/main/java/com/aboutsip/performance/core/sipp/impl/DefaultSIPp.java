@@ -75,6 +75,26 @@ public final class DefaultSIPp implements SIPp {
     }
 
     @Override
+    public int getTargetRate() {
+        synchronized (sippInstance) {
+            if (sippInstance != null) {
+                return sippInstance.getTargetRate();
+            }
+            return -1;
+        }
+    }
+
+    @Override
+    public double getCurrentRate() {
+        synchronized (sippInstance) {
+            if (sippInstance != null) {
+                return sippInstance.getCurrentRate();
+            }
+            return -1;
+        }
+    }
+
+    @Override
     public CompletableFuture<SIPp> start() throws IllegalStateException {
         synchronized (lock) {
             if (currentStartFuture != null) {
@@ -107,8 +127,52 @@ public final class DefaultSIPp implements SIPp {
     }
 
     @Override
+    public boolean cleanUp() throws IllegalStateException {
+        synchronized (lock) {
+            if (sippInstance != null) {
+                return sippInstance.deleteFiles();
+            } else {
+                throw new IllegalStateException("This instance was never started");
+            }
+        }
+    }
+
+    @Override
     public CompletableFuture<SIPp> pause() {
         return null;
+    }
+
+    @Override
+    public CompletableFuture<SIPp> increase10() {
+        synchronized (lock) {
+            if (sippInstance != null) {
+                return sippInstance.increaseRateBy10().thenApply(instance -> DefaultSIPp.this);
+            } else {
+                throw new IllegalStateException("This instance was never started");
+            }
+        }
+    }
+
+    @Override
+    public CompletableFuture<SIPp> decrease10() {
+        synchronized (lock) {
+            if (sippInstance != null) {
+                return sippInstance.decreaseRateBy10().thenApply(instance -> DefaultSIPp.this);
+            } else {
+                throw new IllegalStateException("This instance was never started");
+            }
+        }
+    }
+
+    @Override
+    public CompletableFuture<SIPp> setRate(int rate) {
+        synchronized (lock) {
+            if (sippInstance != null) {
+                return sippInstance.setRate(rate).thenApply(instance -> DefaultSIPp.this);
+            } else {
+                throw new IllegalStateException("This instance was never started");
+            }
+        }
     }
 
 }

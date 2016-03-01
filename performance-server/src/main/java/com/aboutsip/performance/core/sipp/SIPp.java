@@ -14,6 +14,25 @@ public interface SIPp {
     String getFriendlyName();
 
     /**
+     * Get the target rate.
+     *
+     * @return the target call rate or -1 if the underlying SIPp process
+     * isn't running or that we haven't received any stats from it just yet.
+     */
+    @JsonProperty
+    int getTargetRate();
+
+    /**
+     * Get the current rate, which may or may not be
+     * equal to that of the target rate.
+     *
+     * @return the current call rate or -1.0 if the underlying SIPp process
+     * isn't running or that we haven't received any stats from it just yet.
+     */
+    @JsonProperty
+    double getCurrentRate();
+
+    /**
      * Start this instance.
      *
      * @return
@@ -35,17 +54,68 @@ public interface SIPp {
     CompletableFuture<SIPp> stop(boolean force) throws IllegalStateException;
 
     /**
+     * Delete any files that was created when running sipp
+     * @return
+     * @throws IllegalStateException in case the SIPp instance is still running.
+     */
+    boolean cleanUp() throws IllegalStateException;
+
+    /**
      *
      * @return
      */
     CompletableFuture<SIPp> pause();
 
+    /**
+     * Increase the current rate by 10
+     *
+     * @return
+     */
+    CompletableFuture<SIPp> increase10();
+
+    /**
+     * Decrease the current rate by 10
+     *
+     * @return
+     */
+    CompletableFuture<SIPp> decrease10();
+
+    /**
+     * Set the rate to the specified value.
+     *
+     * @param rate
+     * @return
+     */
+    CompletableFuture<SIPp> setRate(int rate);
+
     enum Type {
         UAC, UAS;
     }
 
+    /**
+     * The version of SIPp.
+     */
+    enum Version {
+        THREE_DOT_ZERO,
+        THREE_DOT_ONE,
+        THREE_DOT_TWO,
+        THREE_DOT_THREE,
+        THREE_DOT_FOUR;
+    }
+
     interface Builder {
         Builder withFriendlyName(String name);
+
+        /**
+         * Set the initial rate. I.e., the rate SIPp will start with.
+         *
+         * If not specified, the SIPp instance will start with rate 1.
+         *
+         * @param rate the initial rate. If a value less than 1 is passed in
+         *             the initial rate will be set to 1
+         * @return
+         */
+        Builder withInitialRate(int rate);
 
         /**
          * The name of the scenario or scenario file. If the name
@@ -74,7 +144,9 @@ public interface SIPp {
          * @return
          */
         Builder withRemoteHost(String host);
+
         Builder withRemotePort(int port);
+
         SIPp build();
     }
 }

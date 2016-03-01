@@ -50,8 +50,16 @@ public final class SIPpManager {
         private String remoteHost;
         private int remotePort = 5060;
 
+        private int initialRate = 1;
+
         public SippBuilder(final UUID uuid) {
             this.uuid = uuid;
+        }
+
+        @Override
+        public SIPp.Builder withInitialRate(final int rate) {
+            this.initialRate = rate > 0 ? rate : 1;
+            return this;
         }
 
         @Override
@@ -102,6 +110,8 @@ public final class SIPpManager {
             final String baseName = configureScenario(args);
             configureStatsOptions(args);
             configureRemoteHostOptions(args);
+            configureInitialRate(args);
+
             final ProcessBuilder builder = new ProcessBuilder(args);
             builder.redirectOutput(ProcessBuilder.Redirect.PIPE);
 
@@ -111,6 +121,11 @@ public final class SIPpManager {
                 throw new IllegalStateException("There was already another SIPp instance with uuid " + uuid);
             }
             return sipp;
+        }
+
+        private void configureInitialRate(final List<String> args) {
+            args.add("-r");
+            args.add(Integer.toString(initialRate));
         }
 
         private void configureRemoteHostOptions(final List<String> args) {
