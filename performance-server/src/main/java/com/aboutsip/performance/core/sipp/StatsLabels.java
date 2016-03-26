@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -103,6 +104,15 @@ public interface StatsLabels {
     int findIndex(String label);
 
     /**
+     * Get the label at a specific index.
+     *
+     * @param index
+     * @return the label at that index
+     * @throws IllegalArgumentException in case the provided index is out of bounds
+     */
+    String getLabel(int index) throws IllegalArgumentException;
+
+    /**
      * Create a new {@link StatsObject} where it is assumed that all the values will match up with
      * the labels represented by this object.
      *
@@ -164,6 +174,14 @@ public interface StatsLabels {
                 }
             }
             return -1;
+        }
+
+        @Override
+        public String getLabel(final int index) throws IllegalArgumentException {
+            if (index >= labels.size()) {
+                throw new IllegalArgumentException("Index is outside of the range of available labels");
+            }
+            return labels.get(index);
         }
 
         @Override
@@ -544,9 +562,40 @@ public interface StatsLabels {
         }
 
         @Override
-        public String getResponseTimeRepartition1() {
-            return getString(StatsLabels.RESPONSE_TIME_REPARTITION_1);
+        public ResponseTimeRepartition getResponseTimeRepartition1() {
+            final int index = labels.findIndex(StatsLabels.RESPONSE_TIME_REPARTITION_1);
+            boolean done = false;
+            int i = index;
+
+            int lowerLimit = 0;
+
+            final List<ResponseTime> responseTimes = new ArrayList<>(9);
+
+            while (!done && ++i < values.size()) {
+                final String label = labels.getLabel(i);
+                if (label.startsWith("<") || (label.startsWith(">="))) {
+                    final int count = Integer.parseInt(values.get(i));
+                    int upperLimit = parseLabel(label);
+
+                    // The SIPp special case where we have the last value
+                    // and as such the upper limit is now infinity
+                    if (upperLimit == lowerLimit) {
+                        upperLimit = -1;
+                    }
+                    responseTimes.add(ResponseTime.create(lowerLimit, upperLimit, count));
+                    lowerLimit = upperLimit;
+                } else {
+                    done = true;
+                }
+            }
+
+            return ResponseTimeRepartition.create(responseTimes);
         }
+
+        private int parseLabel(final String label) {
+            return label.chars().map(c -> c - 48).filter(c -> c >= 0 && c < 10).reduce(0, (left, right) -> left * 10 + right);
+        }
+
 
         @Override
         public String getCallLengthRepartition() {

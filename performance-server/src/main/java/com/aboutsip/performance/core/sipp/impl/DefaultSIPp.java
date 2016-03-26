@@ -1,12 +1,14 @@
 package com.aboutsip.performance.core.sipp.impl;
 
 import com.aboutsip.performance.core.sipp.SIPp;
+import com.aboutsip.performance.core.sipp.StatsObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Function;
 
 /**
  * Represents a SIPp "task". I.e. you wish to run a particular
@@ -76,21 +78,30 @@ public final class DefaultSIPp implements SIPp {
 
     @Override
     public int getTargetRate() {
-        synchronized (sippInstance) {
-            if (sippInstance != null) {
-                return sippInstance.getTargetRate();
-            }
-            return -1;
-        }
+        return getObject(instance -> instance.getTargetRate());
+    }
+
+    @Override
+    public int getRetransmissions() {
+        return getObject(instance -> instance.getRetransmissions());
+    }
+
+    @Override
+    public StatsObject getStats() {
+        return getObject(instance -> instance.getStats());
     }
 
     @Override
     public double getCurrentRate() {
+        return getObject(instance -> instance.getCurrentRate());
+    }
+
+    private <T> T getObject(Function<SIPpInstance, T> f) {
         synchronized (sippInstance) {
             if (sippInstance != null) {
-                return sippInstance.getCurrentRate();
+                return f.apply(sippInstance);
             }
-            return -1;
+            return null;
         }
     }
 
@@ -112,8 +123,6 @@ public final class DefaultSIPp implements SIPp {
             return currentStartFuture;
         }
     }
-
-
 
     @Override
     public CompletableFuture<SIPp> stop(boolean force) throws IllegalStateException {
@@ -138,9 +147,16 @@ public final class DefaultSIPp implements SIPp {
     }
 
     @Override
-    public CompletableFuture<SIPp> pause() {
-        return null;
+    public CompletableFuture<SIPp> pause() throws IllegalStateException {
+        synchronized (lock) {
+            if (sippInstance != null) {
+                return sippInstance.pause().thenApply(instance -> DefaultSIPp.this);
+            } else {
+                throw new IllegalStateException("This instance was never started");
+            }
+        }
     }
+
 
     @Override
     public CompletableFuture<SIPp> increase10() {

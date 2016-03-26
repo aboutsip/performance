@@ -32,6 +32,15 @@ public class StatsLabelsTest extends SIPpTestBase{
     }
 
     @Test
+    public void testReadResponseTimePartition() throws Exception {
+        final BufferedReader reader = loadResourceFile("uac_20157_.csv");
+        final StatsLabels labels = StatsLabels.create(SIPp.Version.THREE_DOT_THREE, reader.readLine());
+        final StatsObject stats1 = labels.createNewStats(getNthLine(reader, 7));
+
+        System.out.println(stats1.getResponseTimeRepartition1());
+    }
+
+    @Test
     public void testReadStats() throws Exception {
         final BufferedReader reader = loadResourceFile("uac_20157_.csv");
         final StatsLabels labels = StatsLabels.create(SIPp.Version.THREE_DOT_THREE, reader.readLine());

@@ -131,7 +131,7 @@ public interface StatsObject {
     Duration getCallLengthCumulative();
     String getCallLengthStDev();
     String getCallLengthStDevCumulative();
-    String getResponseTimeRepartition1();
+    ResponseTimeRepartition getResponseTimeRepartition1();
     String getCallLengthRepartition();
 
 

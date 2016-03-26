@@ -10,9 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.lang.reflect.Field;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.ScheduledExecutorService;
@@ -40,7 +38,6 @@ public class SIPpInstance {
     private final Process process;
 
     // The re-directed stdout/in/error
-    private final BufferedReader input;
     private final BufferedWriter output;
     private final BufferedReader error;
 
@@ -64,7 +61,8 @@ public class SIPpInstance {
      */
     private final StatsObject emptyStats;
 
-    private final List<StatsObject> stats;
+    private int statsIndex = 0;
+    private final Map<Integer, StatsObject> stats;
 
     /**
      * Used as a lock. Nothing fancy needed...
@@ -74,7 +72,6 @@ public class SIPpInstance {
     private SIPpInstance(final ScheduledExecutorService executorService,
                          final int pid,
                          final Process process,
-                         final BufferedReader input,
                          final BufferedWriter output,
                          final BufferedReader error,
                          final BufferedReader countsFileReader,
@@ -85,7 +82,6 @@ public class SIPpInstance {
         this.executorService = executorService;
         this.pid = pid;
         this.process = process;
-        this.input = input;
         this.output = output;
         this.error = error;
         this.countsFileReader = countsFileReader;
@@ -97,8 +93,14 @@ public class SIPpInstance {
         final String emptyStat = "2016-02-26      15:13:39:882    1456528419.882808;2016-02-26    15:13:39:882    1456528419.882808;2016-02-26    15:13:39:886    1456528419.886260;00:00:00;00:00:00;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;00:00:00:000;00:00:00:000;00:00:00:000;00:00:00:000;00:00:00:000;00:00:00:000;00:00:00:000;00:00:00:000;;0;0;0;0;0;0;0;0;0;;0;0;0;0;0;0;0;0;";
         this.emptyStats = statsLabels.createNewStats(emptyStat);
 
-        // TODO: need to limit this...
-        this.stats = new ArrayList<>(600);
+        // really just keep track of a few. If someone is asking for more
+        // then lets go and fetch that entry off of file again...
+         stats = new LinkedHashMap<Integer, StatsObject>() {
+            @Override
+            protected boolean removeEldestEntry(final Map.Entry<Integer, StatsObject> eldest) {
+                return this.size() > 10;
+            }
+        };
     }
 
     public static CompletableFuture<SIPpInstance> create(final ScheduledExecutorService executorService,
@@ -113,7 +115,6 @@ public class SIPpInstance {
                     final Process process = processBuilder.start();
                     final int pid = getPid(process);
 
-                    final BufferedReader input = new BufferedReader(new InputStreamReader(process.getInputStream()));
                     final BufferedWriter output = new BufferedWriter(new OutputStreamWriter(process.getOutputStream()));
                     final BufferedReader error = new BufferedReader(new InputStreamReader(process.getErrorStream()));
 
@@ -137,7 +138,7 @@ public class SIPpInstance {
                     final StatsLabels labels = StatsLabels.create(version, readLine(statsFilereader));
 
                     final SIPpInstance instance = new SIPpInstance(executorService, pid, process,
-                            input, output, error, countsFileReader, statsFilereader, countsFile, statsFile, labels);
+                            output, error, countsFileReader, statsFilereader, countsFile, statsFile, labels);
 
                     future.complete(instance);
 
@@ -196,12 +197,24 @@ public class SIPpInstance {
         return getLatestStats().orElse(emptyStats).getCallRate();
     }
 
+    public int getRetransmissions() {
+        return getLatestStats().orElse(emptyStats).getRetransmissions();
+    }
+
+    public int getRetransmissionsCumulative() {
+        return getLatestStats().orElse(emptyStats).getRetransmissionsCumulative();
+    }
+
+    public StatsObject getStats() {
+        return getLatestStats().orElse(emptyStats);
+    }
+
     private Optional<StatsObject> getLatestStats() {
         synchronized (lock) {
             if (stats.isEmpty()) {
                 return Optional.empty();
             }
-            return Optional.of(stats.get(stats.size() - 1));
+            return Optional.of(stats.get(statsIndex - 1));
         }
 
     }
@@ -213,7 +226,7 @@ public class SIPpInstance {
 
         final StatsObject stats = statsLabels.createNewStats(raw);
         synchronized (lock) {
-            this.stats.add(stats);
+            this.stats.put(statsIndex++, stats);
         }
 
         return this;
@@ -276,6 +289,10 @@ public class SIPpInstance {
         }
 
         return CompletableFuture.completedFuture(this);
+    }
+
+    public CompletableFuture<SIPpInstance> pause() {
+        return CompletableFuture.supplyAsync(() -> sendCommand("p"), executorService);
     }
 
     public CompletableFuture<SIPpInstance> increaseRateBy10() {

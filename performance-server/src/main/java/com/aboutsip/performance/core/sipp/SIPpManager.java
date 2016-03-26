@@ -3,6 +3,7 @@ package com.aboutsip.performance.core.sipp;
 import com.aboutsip.performance.core.sipp.impl.DefaultSIPp;
 import com.google.common.base.Preconditions;
 
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -113,7 +114,8 @@ public final class SIPpManager {
             configureInitialRate(args);
 
             final ProcessBuilder builder = new ProcessBuilder(args);
-            builder.redirectOutput(ProcessBuilder.Redirect.PIPE);
+            // TODO: is not going to work for all operating systems.
+            builder.redirectOutput(ProcessBuilder.Redirect.to(new File("/dev/null")));
 
             final SIPp sipp = new DefaultSIPp(executorService, builder, uuid, baseName, friendlyName);
             final SIPp current = instances.putIfAbsent(uuid, sipp);

@@ -1,5 +1,6 @@
 package com.aboutsip.performance.core.sipp;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.UUID;
@@ -31,6 +32,17 @@ public interface SIPp {
      */
     @JsonProperty
     double getCurrentRate();
+
+    /**
+     * The number of retransmissions that has occurred since last report.
+     *
+     * @return
+     */
+    @JsonProperty
+    int getRetransmissions();
+
+    @JsonIgnore
+    StatsObject getStats();
 
     /**
      * Start this instance.

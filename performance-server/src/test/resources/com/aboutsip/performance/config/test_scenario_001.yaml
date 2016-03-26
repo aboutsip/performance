@@ -1,0 +1,147 @@
+# Just a simple name
+name: Simple INVITE Scenario
+
+# Description of what the test is doing in slightly more detail
+description: A normal INVITE scenario with the UAC initiating the call and also terminating it.
+             Btw, you can write a pretty long description as long as you indent the lines like
+             we are doing here...
+
+# Configure the SIPp instances.
+# All of these instances will have a unique name that
+# you then use to refer to a particular client in order
+# to control it.
+clients:
+
+    # This is a SIPp client named "uas1". This MUST be a unique name and can later
+    # be referred to when e.g. increasing the rate of a particular client.
+    myUAS:
+        # The particular sipp scenario that this instance should execute.
+        # This is either one of the built in scenarios in SIPp or one that
+        # you have created yourself. If the name ends with ".xml" then it is
+        # assumed that this is indeed a scenario file and not a built in
+        # scenario.
+        scenario: uas
+
+        # The listening point for this SIPp instance.
+        # If the Performance Controller that you interact with
+        # has the same IP as this host, it is assumed that the
+        # sipp instance will execute on the same machine. If not, then
+        # this controller will reach out to the controller on this address
+        # and create and configure a SIPp instance on that machine.
+        host: 127.0.0.1
+
+        # The port to which this SIPp instance is supposed to bind to.
+        port: 5060
+
+    theUacDude:
+        scenario: uac
+        host: 192.168.0.100
+        port: 5062
+
+        # The remost host to which we will send our traffic.
+        # In this example, that would be the UAS we defined above.
+        remoteHost: 127.0.0.1
+
+        # The port of the remote port to which we will send our traffic.
+        # In this example, that would be the UAS we defined above.
+        remotePort: 5060
+
+    # Create another UAC, which will run on host 62.63.64.65
+    # so unless this controller runs on that machine and that
+    # machine also has IP 192.168.0.100 then these two UACs
+    # will run on different machines and this controller
+    # will start two UACs on two different hosts
+    anotherUacDude:
+        scenario: special_uac.xml
+        scenarioFolder: /etc/performance/scenarios
+        host: 62.63.64.65
+        port: 5060
+        remoteHost: 127.0.0.1
+        remotePort: 5060
+
+
+actions:
+    # Start the SUT. This command will not continue until the SUT actually
+    # has started.
+    - start sut
+
+    # Start the UAS. Again, the start-command is synchronous.
+    - start myUAS
+
+    # Start the two UACs and they will started in paralell and once both are up
+    # the start command will return.
+    - start anotherUacDude theUacDude
+
+    # Start monitoring the various processes. Note that
+    # you must start the "things" you want to monitor first
+    # because we will need the pid of the process.
+    # You can either specify them one after another or...
+    - monitor --type cpu --target anotherUacDude theUacDude myUAS
+
+    # just specify one at a time and the difference is as always
+    # that every command is syncronous but you can specify multiple
+    # targets
+    - monitor --type cpu iostat gc --target sut
+
+    # Set the rate of 'theUacDude' to 10. All UACs will always
+    # start off with a rate of zero so unless you, after you started
+    # it, set the rate to something, it won't issue any traffic.
+    - rate --set 10 theUacDude
+
+    # Sleep for 1 minute.
+    - sleep 1m
+
+    # Generate a snapshot report named "warmup_phase"
+    - generate snapshot report name warmup_phase
+
+    # You can create a named mark in time that you can refer to later
+    # on when e.g. generating a report between two particular marks.
+    - mark start_20_cps
+
+    # Set the rate to 20
+    - rate --set 20 theUacDude
+    - sleep 1m
+
+    # Generate a new snapshot report from the mark we named
+    # "start_20_cps" and name the report "report_20_cps".
+    - generate snapshot from start_20_cps name report 20_cps
+    - report --type cpu --from start_20_cps
+    - mark start_100_cps
+    - rate --set 100 theUacDude
+    - sleep 1hr
+
+    # Pause the UAC
+    - pause theUacDude
+
+    # Stop (quit) both of the instances. When given multiple targets (instances)
+    # they will be executed in paralell
+    - stop --force theUAcDude myUAS
+
+    # Generate a new report and since we are not specifying the from and to
+    # timelines we will generate one single report for the entire duration
+    # of the run (there is an explicit mark created at the beginning and end
+    # of a run)
+
+    # Will generate a snapshot report that includes cpu, iostat and gc information of
+    # the processes specified. If you don't specify a process, then all processes that
+    # previously were asked to be monitored will be included.
+    #
+    # A snapshot report will be included as its own section in the final report.
+    # Hence, snapshot reports doesn't actually generate a report per se so if you
+    # don't generate a final report, this is essentially a no-op
+    #
+    # Snapshot reports doesn't have a filename either
+    #
+    # The title of the snapshot report will just be the headline of that section
+    # in the final report.
+    - report --snapshot --include cpu iostat gc --title "UAS" myUAS
+
+    - report --include cpu iostat gc --title "Final Report" --type pdf --name simple_run
+
+    # zip everything up. Note, the filename ending dictates what type of
+    # compression is used. So even though the command is named 'zip' we
+    # can actually both zip and tar things up.
+    - zip --include everything somename.tar.gz
+
+    # finally, just email the report
+    - email --file somename.tar.gz --to jonas@jonasborjesson.com --subject "The latest run"
