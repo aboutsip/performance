@@ -2,10 +2,35 @@ package io.parsenip;
 
 import org.junit.Test;
 
+import static org.hamcrest.CoreMatchers.*;
+import static org.junit.Assert.assertThat;
+
 /**
  * Created by jonas on 3/8/16.
  */
 public class ArgumentTest {
+
+    @Test
+    public void testOptionalWithChoices() throws Exception {
+        Argument<String> type = Argument.withLongName("--type")
+                .withNoDescription()
+                .withZeroOrMoreArguments()
+                .ofType(String.class)
+                .withChoices("cpu", "iostat", "gc")
+                .withDefaultValue("cpu")
+                .build();
+
+        assertThat(type.getLongName().get(), is("--type"));
+        assertThat(type.isConstant(), is(false));
+        assertThat(type.isRequired(), is(false));
+        assertThat(type.isValueAccepted("cpu"), is(true));
+        assertThat(type.isValueAccepted("iostat"), is(true));
+        assertThat(type.isValueAccepted("gc"), is(true));
+
+        // by default, it's just a simple o.equals(other) so that means
+        // that string are case sensitive
+        assertThat(type.isValueAccepted("Gc"), is(false));
+    }
 
     @Test
     public void testBasicArgument() throws Exception {

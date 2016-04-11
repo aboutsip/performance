@@ -8,34 +8,18 @@ import java.util.Optional;
 /**
  *
  */
-public class DefaultConstantArgument<T> implements ConstantArgument<T> {
+public class DefaultConstantArgument<T> extends DefaultArgument<T> implements ConstantArgument<T> {
 
-    private final Optional<String> shortName;
-    private final Optional<String> longName;
-    private final Optional<String> description;
     private final T valueWhenPresent;
-    private final Optional<T> valueWhenAbsent;
 
-    public DefaultConstantArgument(final Optional<String> shortName,
+    public DefaultConstantArgument(final Class<T> type,
+                                   final Optional<String> shortName,
                                    final Optional<String> longName,
                                    final Optional<String> description,
                                    final T valueWhenPresent,
                                    final Optional<T> valueWhenAbsent) {
-        this.shortName = shortName;
-        this.longName = longName;
-        this.description = description;
+        super(type, shortName, longName, description, valueWhenAbsent);
         this.valueWhenPresent = valueWhenPresent;
-        this.valueWhenAbsent = valueWhenAbsent;
-    }
-
-    @Override
-    public Optional<String> getShortName() {
-        return shortName;
-    }
-
-    @Override
-    public Optional<String> getLongName() {
-        return longName;
     }
 
     @Override
@@ -45,6 +29,7 @@ public class DefaultConstantArgument<T> implements ConstantArgument<T> {
 
     @Override
     public Optional<T> getValueWhenAbsent() {
-        return valueWhenAbsent;
+        return getDefaultValue();
     }
+
 }

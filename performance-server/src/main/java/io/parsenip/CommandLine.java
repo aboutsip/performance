@@ -15,16 +15,18 @@ public interface CommandLine {
      */
     String commandName();
 
-    <T> Optional<T> getValue(Class<T> type, String argumentName);
+    // <T> Optional<T> getValue(Class<T> type, String argumentName);
+    <T> Optional<T> getValue(Argument<T> argument);
 
-    <T> Optional<List<T>> getValues(Class<T> type, String argumentName);
+    // <T> List<T> getValues(Class<T> type, String argumentName);
+    <T> List<T> getValues(Argument<T> argument);
 
-    Optional<Boolean> getBoolean(String argumentName);
-    Optional<Integer> getInteger(String argumentName);
-    Optional<Double> getDouble(String argumentName);
-    Optional<Float> getFloat(String argumentName);
-    Optional<Byte> getByte(String argumentName);
-    Optional<String> getString(String argumentName);
-    Optional<Character> getChar(String argumentName);
+    // Optional<Boolean> getBoolean(String argumentName);
+    // Optional<Integer> getInteger(String argumentName);
+    // Optional<Double> getDouble(String argumentName);
+    // Optional<Float> getFloat(String argumentName);
+    // Optional<Byte> getByte(String argumentName);
+    // Optional<String> getString(String argumentName);
+    // Optional<Character> getChar(String argumentName);
 
 }

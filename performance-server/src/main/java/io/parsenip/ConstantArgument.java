@@ -21,4 +21,9 @@ public interface ConstantArgument<T> extends Argument<T> {
         return this;
     }
 
+    @Override
+    default Optional<T> getDefaultValue() {
+        return getValueWhenAbsent();
+    }
+
 }

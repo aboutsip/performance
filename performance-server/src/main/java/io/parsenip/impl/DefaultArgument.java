@@ -2,23 +2,105 @@ package io.parsenip.impl;
 
 import io.parsenip.Argument;
 
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 import java.util.function.Function;
 
 /**
  *
  */
-public class DefaultArgument<T> implements Argument<T> {
+public abstract class DefaultArgument<T> implements Argument<T> {
+
+    private final Optional<String> shortName;
+    private final Optional<String> longName;
+    private final Optional<String> description;
+    private final Optional<T> defaultValue;
+    private final Class<T> type;
+
+    private static final Map<Class<?> , Function<String, ?>> parsers = new HashMap<>();
+
+    static {
+        parsers.put(Boolean.class, s -> {
+            if ("true".equalsIgnoreCase(s)) {
+                return true;
+            }
+            if ("false".equalsIgnoreCase(s)) {
+                return false;
+            }
+            throw new IllegalArgumentException("Cannot convert " + s + " into a Boolean");
+        });
+        parsers.put(String.class, s -> s);
+        parsers.put(Integer.class, Integer::parseInt);
+        parsers.put(Double.class, Double::parseDouble);
+        parsers.put(Float.class, Float::parseFloat);
+    }
+
+
+    public DefaultArgument(final Class<T> type,
+                           final Optional<String> shortName,
+                           final Optional<String> longName,
+                           final Optional<String> description,
+                           final Optional<T> defaultValue ) {
+        this.type = type;
+        this.shortName = shortName;
+        this.longName = longName;
+        this.description = description;
+        this.defaultValue = defaultValue;
+    }
+
+    @Override
+    public Class<T> getType() {
+        return type;
+    }
+
+    @Override
+    public T valueOf(final String value) throws IllegalArgumentException {
+        if (value == null || value.isEmpty()) {
+            throw new IllegalArgumentException("The value cannot be null or empty");
+        }
+
+        try {
+            return (T) parsers.get(type).apply(value);
+        } catch (final NullPointerException e) {
+            throw new IllegalArgumentException("There is no registered parser for type " + type.getName());
+        }
+    }
+
 
     @Override
     public Optional<String> getShortName() {
-        return null;
+        return shortName;
     }
 
     @Override
     public Optional<String> getLongName() {
-        return null;
+        return longName;
+    }
+
+    @Override
+    public Optional<T> getDefaultValue() {
+        return defaultValue;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o){
+            return true;
+        }
+
+        try {
+            final DefaultArgument<?> that = (DefaultArgument<?>) o;
+            return shortName.equals(that.shortName) && longName.equals(that.longName);
+
+        } catch (final ClassCastException e) {
+            return false;
+        }
+    }
+
+    @Override
+    public int hashCode() {
+        int result = shortName.hashCode();
+        result = 31 * result + longName.hashCode();
+        return result;
     }
 
     public static ShortNameStep withLongName(final String longName) {
@@ -70,6 +152,9 @@ public class DefaultArgument<T> implements Argument<T> {
         private final Optional<String> longName;
         private final Optional<String> description;
 
+        private int minNoOfArguments = 0;
+        private int maxNoOfArguments = 0;
+
         private SelectArgumentBuilder(final String shortName, final String longName, final String description) {
             this.shortName = Optional.ofNullable(shortName);
             this.longName = Optional.ofNullable(longName);
@@ -87,17 +172,23 @@ public class DefaultArgument<T> implements Argument<T> {
 
         @Override
         public VariableArgumentStartStep withSingleArgument() {
-            return null;
+            minNoOfArguments = 1;
+            maxNoOfArguments = 1;
+            return this;
         }
 
         @Override
         public VariableArgumentStartStep withAtLeastOneArgument() {
-            return null;
+            minNoOfArguments = 1;
+            maxNoOfArguments = Integer.MAX_VALUE;
+            return this;
         }
 
         @Override
-        public VariableArgumentStartStep withManyArguments() {
-            return null;
+        public VariableArgumentStartStep withZeroOrMoreArguments() {
+            minNoOfArguments = 0;
+            maxNoOfArguments = Integer.MAX_VALUE;
+            return this;
         }
 
         // ----------------------------------------------------------------------
@@ -118,8 +209,95 @@ public class DefaultArgument<T> implements Argument<T> {
         // ----------------------------------------------------------------------
 
         @Override
-        public <T> VariableArgumentOptionalStep<T> ofType(Class<T> type) {
-            return null;
+        public <T> VariableArgumentOptionalStep<T> ofType(final Class<T> type) {
+            return new VariableArgumentOptionalStepBuilder<>(type, shortName, longName,
+                    description, minNoOfArguments, maxNoOfArguments);
+        }
+    }
+
+    private static class VariableArgumentOptionalStepBuilder<T> implements VariableArgumentOptionalStep<T> {
+        private final Optional<String> shortName;
+        private final Optional<String> longName;
+        private final Optional<String> description;
+
+        private final Class<T> type;
+
+        private final int minNoOfArguments;
+        private final int maxNoOfArguments;
+
+        private T defaultvalue;
+
+        private List<T> validChoices = new ArrayList<>();
+
+        private boolean isRequired = false;
+
+        private Function<T, T> onArgumentFunction;
+
+        private VariableArgumentOptionalStepBuilder(final Class<T> type, final Optional<String> shortName,
+                                                    final Optional<String> longName,
+                                                    final Optional<String> description,
+                                                    final int minNoOfArguments,
+                                                    final int maxNoOfArguments) {
+            this.type = type;
+            this.shortName = shortName;
+            this.longName = longName;
+            this.description = description;
+            this.minNoOfArguments = minNoOfArguments;
+            this.maxNoOfArguments = maxNoOfArguments;
+        }
+
+        @Override
+        public VariableArgumentOptionalStep<T> withDefaultValue(final T value) {
+            this.defaultvalue = value;
+            return this;
+        }
+
+        @Override
+        public VariableArgumentOptionalStep<T> withChoice(final T value) {
+            if (value != null) {
+                validChoices.add(value);
+            }
+            return this;
+        }
+
+        @Override
+        public VariableArgumentOptionalStep<T> withChoices(final T... values) {
+            if (values != null) {
+                Arrays.stream(values).filter(value -> value != null).forEach(validChoices::add);
+            }
+            return this;
+        }
+
+        @Override
+        public VariableArgumentOptionalStep<T> withChoices(final List<T> values) {
+            if (values != null) {
+                values.stream().filter(value -> value != null).forEach(validChoices::add);
+            }
+            return this;
+        }
+
+        @Override
+        public VariableArgumentOptionalStep<T> onArgument(final Function<T, T> f) throws IllegalArgumentException {
+            onArgumentFunction = f;
+            return this;
+        }
+
+        @Override
+        public VariableArgumentOptionalStep<T> isRequired() {
+            this.isRequired = true;
+            return this;
+        }
+
+        @Override
+        public VariableArgumentOptionalStep<T> isOptional() {
+            this.isRequired = false;
+            return this;
+        }
+
+        @Override
+        public Argument<T> build() {
+            return new VariableArgument<>(type, shortName, longName, description, Optional.ofNullable(defaultvalue),
+                    validChoices, isRequired);
         }
     }
 
@@ -134,7 +312,7 @@ public class DefaultArgument<T> implements Argument<T> {
         private T valueWhenAbsent;
 
 
-        private ConstantFinalBuilder(final Optional<String> shortName,
+        private ConstantFinalBuilder( final Optional<String> shortName,
                                      final Optional<String> longName,
                                      final Optional<String> description,
                                      final T valueWhenPresent) {
@@ -152,62 +330,8 @@ public class DefaultArgument<T> implements Argument<T> {
 
         @Override
         public Argument<T> build() {
-            return new DefaultConstantArgument<>(shortName, longName, description, valueWhenPresent,
+            return new DefaultConstantArgument<>((Class<T>)valueWhenPresent.getClass(), shortName, longName, description, valueWhenPresent,
                     Optional.ofNullable(valueWhenAbsent));
-        }
-    }
-
-    private static class InitialBuilder<T> implements ShortNameStep,
-            LongNameStep, HelpStep, ArgumentStep, ConstantArgumentStep,
-            VariableArgumentStartStep {
-        @Override
-        public ConstantArgumentStep withNoArguments() {
-            return null;
-        }
-
-        @Override
-        public VariableArgumentStartStep withSingleArgument() {
-            return null;
-        }
-
-        @Override
-        public VariableArgumentStartStep withAtLeastOneArgument() {
-            return null;
-        }
-
-        @Override
-        public VariableArgumentStartStep withManyArguments() {
-            return null;
-        }
-
-        @Override
-        public <T> ConstantArgumentFinalStep<T> withValueWhenPresent(T value) {
-            return null;
-        }
-
-        @Override
-        public HelpStep withLongName(String longName) {
-            return null;
-        }
-
-        @Override
-        public HelpStep withShortName(String shortName) {
-            return null;
-        }
-
-        @Override
-        public ArgumentStep withDescription(String description) {
-            return null;
-        }
-
-        @Override
-        public ArgumentStep withNoDescription() {
-            return null;
-        }
-
-        @Override
-        public <T> VariableArgumentOptionalStep<T> ofType(Class<T> type) {
-            return null;
         }
     }
 }

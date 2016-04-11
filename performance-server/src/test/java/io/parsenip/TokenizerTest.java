@@ -2,7 +2,6 @@ package io.parsenip;
 
 import org.junit.Test;
 
-import java.text.ParseException;
 import java.util.List;
 
 import static org.hamcrest.CoreMatchers.is;
@@ -92,9 +91,9 @@ public class TokenizerTest {
 
     @Test
     public void testSingleQuote() throws Exception {
-        assertThat(Tokenizer.getDoubleQuotedString("'Hello World'"), is("Hello World"));
-        assertThat(Tokenizer.getDoubleQuotedString("'Hello'"), is("Hello"));
-        assertThat(Tokenizer.getDoubleQuotedString("''"), is(""));
+        assertThat(Tokenizer.getSingleQuotedString("'Hello World'"), is("Hello World"));
+        assertThat(Tokenizer.getSingleQuotedString("'Hello'"), is("Hello"));
+        assertThat(Tokenizer.getSingleQuotedString("''"), is(""));
     }
 
     @Test

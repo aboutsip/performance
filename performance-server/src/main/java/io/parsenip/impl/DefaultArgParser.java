@@ -3,8 +3,11 @@ package io.parsenip.impl;
 import com.fasterxml.jackson.dataformat.yaml.snakeyaml.scanner.Constant;
 import com.google.common.collect.Lists;
 import io.parsenip.*;
+import io.parsenip.ParseException;
 
+import java.text.*;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
@@ -19,6 +22,14 @@ public class DefaultArgParser implements ArgParser {
 
     private final Optional<String> description;
 
+    /**
+     * Those arguments that have default values and as such
+     * doesn't need to be present on the command line must
+     * be processed at the end of parsing a command line
+     * to find out the ones that indeed weren't present.
+     */
+    private final List<Argument<?>> argumentsWithDefaults;
+
     private final List<Argument<?>> arguments;
 
     private final List<Character> allowedChars;
@@ -28,6 +39,7 @@ public class DefaultArgParser implements ArgParser {
                              final boolean allowDoubleQuotes,
                              final boolean allowSingleQuotes,
                              final List<Argument<?>> arguments,
+                             final List<Argument<?>> argumentsWithDefaults,
                              final List<Character> allowedChars) {
         this.program = program;
         this.allowDoubleQuotes = allowDoubleQuotes;
@@ -35,6 +47,8 @@ public class DefaultArgParser implements ArgParser {
         this.description = description;
         this.arguments = arguments;
         this.allowedChars = allowedChars;
+        this.argumentsWithDefaults = argumentsWithDefaults;
+
     }
 
     @Override
@@ -61,6 +75,14 @@ public class DefaultArgParser implements ArgParser {
         }
 
         tokens.forEach(t -> processToken(state, t));
+
+        // Ensure that all those arguments that had default values
+        // and were NOT present on the command line is indeed
+        // included in the final state.
+        argumentsWithDefaults.stream().filter(arg -> !state.arguments.contains(arg)).forEach(arg -> {
+            state.commandLine.withArgument(arg, arg.getDefaultValue().get());
+        });
+
         return state.commandLine.build();
     }
 
@@ -69,12 +91,9 @@ public class DefaultArgParser implements ArgParser {
         Argument<?> currentArgument;
 
         /**
-         * Keep track of the contant arguments that we did see because
-         * the ones that weren't present may have a default value when
-         * not present and if so, they will be added to the final state
-         * of the {@link CommandLine} as if they were present.
+         * The arguments we have processed so far
          */
-        List<ConstantArgument<?>> presentConstants = new ArrayList<>();
+        List<Argument<?>> arguments = new ArrayList<>();
 
         /**
          * Where we are in the processing of characters. Only
@@ -96,11 +115,83 @@ public class DefaultArgParser implements ArgParser {
             processLongOptionalArgument(state, token);
         } else if (isOptionalChar){
             processShortOptionalArgument(state, token);
+        } else {
+            processValue(state, token);
         }
     }
 
     private void processLongOptionalArgument(final ParseState state, final String token) {
+        final Argument<?> arg = findArgument(token).orElseThrow(() ->
+                new ParseException("Unable to find an argument named " + token, state.processedChars));
 
+        state.currentArgument = arg;
+        if (arg.isConstant()) {
+            processConstantArgument(state, arg.toConstantArgument());
+        }
+    }
+
+    /**
+     *
+     * @param state
+     * @param token
+     */
+    private void processValue(final ParseState state, final String token) {
+
+        // always prefer the current argument if one already has been selected
+        // and is prepared to accept the value
+        // TODO: not correct if the argument has already e.g. consumed 2 values and that
+        // is its max args allowed.
+        if (state.currentArgument == null || !state.currentArgument.isValueAccepted(token)) {
+            state.currentArgument = findNextArgument(state, token);
+        }
+
+        if (state.currentArgument == null) {
+            throw new ParseException("Illegal value \"" + token + "\"", 0);
+        }
+
+        state.commandLine.withArgument(state.currentArgument, state.currentArgument.valueOf(token));
+        state.arguments.add(state.currentArgument);
+    }
+
+    private Argument<?> findNextArgument(final ParseState state, final String token) {
+        final List<Argument<?>> candidates = arguments.stream().filter(arg -> accept(state, arg, token))
+                .collect(Collectors.toList());
+
+        if (candidates.isEmpty()) {
+            throw new ParseException("Illegal value \"" + token + "\"", 0);
+        }
+
+        // TODO: should we issue a warning that we found multiple candidates that accepts
+        // this value?
+        return candidates.get(0);
+    }
+
+    /**
+     * Check if an argument would even consider accepting the value. This is determined by if we
+     * can even parse the value into the correct type, then see if the argument will accept the value
+     * and then check if we were to add this to that argument, would it now have too many accepted
+     * arguments (some arguments are configured to only have max 3 values etc)
+     *
+     * @param argument
+     * @param token
+     * @return
+     */
+    private boolean accept(final ParseState state, final Argument<?> argument, final String token) {
+        if (token == null || token.isEmpty()) {
+            return false;
+        }
+        return argument.isValueAccepted(token);
+    }
+
+    private void processConstantArgument(final ParseState state, final ConstantArgument<?> arg) {
+        final Object value = arg.toConstantArgument().getValueWhenPresent();
+        state.commandLine.withArgument(arg, arg.toConstantArgument().getValueWhenPresent());
+        state.arguments.add(arg);
+
+        // a constant argument will not have a value and therefore
+        // we are no long working on a particular argument so
+        // reset it.
+        state.currentArgument = null;
     }
 
     private void processShortOptionalArgument(final ParseState state, final String token) {
@@ -118,14 +209,7 @@ public class DefaultArgParser implements ArgParser {
                     new ParseException("Unable to find an argument named " + name, state.processedChars));
 
             if (arg.isConstant()) {
-                final Object value = arg.toConstantArgument().getValueWhenPresent();
-                state.commandLine.withArgument(arg.getShortName(), arg.getLongName(), value.getClass(), value);
-                state.presentConstants.add(arg.toConstantArgument());
-
-                // a constant argument will not have a value and therefore
-                // we are no long working on a particular argument so
-                // reset it.
-                state.currentArgument = null;
+                processConstantArgument(state, arg.toConstantArgument());
             } else if (i < token.length()) {
                 throw new ParseException("Optional argument \"" + name + "\" requires a value but there "
                         + "are other short options grouped together with this one. This is not allowed", 0);
@@ -236,11 +320,16 @@ public class DefaultArgParser implements ArgParser {
                 allowedChars.add('-');
             }
 
+            final List<Argument<?>> argumentsWithDefaults = arguments.stream()
+                    .filter(arg -> !arg.isRequired() && arg.getDefaultValue().isPresent())
+                    .collect(Collectors.toList());
+
             return new DefaultArgParser(program,
                     Optional.ofNullable(description),
                     allowDoubleQuotes,
                     allowSingleQuotes,
                     Collections.unmodifiableList(arguments),
+                    Collections.unmodifiableList(argumentsWithDefaults),
                     Collections.unmodifiableList(allowedChars));
         }
     }

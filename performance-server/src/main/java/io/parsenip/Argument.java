@@ -30,6 +30,43 @@ public interface Argument<T> {
     }
 
     /**
+     * Whether or not this argument is required
+     * to specify on the command line or an error
+     * will occur when parsing.
+     *
+     * @return
+     */
+    default boolean isRequired() {
+        return false;
+    }
+
+    /**
+     * An {@link Argument} may have a default value specified.
+     *
+     * @return
+     */
+    default Optional<T> getDefaultValue() {
+        return Optional.empty();
+    }
+
+    /**
+     * Check if the raw unparsed token would be accepted by this {@link Argument}.
+     * The {@link Argument} would first try to convert the raw string into the
+     * correct type and if that succeeds, checks against its internal, if present,
+     * list of acceptable choices. If all matches then true is returned, otherwise false.
+     *
+     * @param token
+     * @return
+     */
+    default boolean isValueAccepted(final String token) {
+        return false;
+    }
+
+    Class<T> getType();
+
+    T valueOf(final String value) throws IllegalArgumentException;
+
+    /**
      * If this {@link Argument} is indeed a {@link ConstantArgument} then you can cast it
      * using this method.
      *
@@ -39,6 +76,19 @@ public interface Argument<T> {
         throw new ClassCastException("Unable to cast " + this.getClass().getName()
                 + " into a " + ConstantArgument.class.getName());
     }
+
+    /**
+     * Two {@link Argument}s are considered equal if their name matches (so the
+     * value is NOT taken into consideration).
+     *
+     * @param other
+     * @return
+     */
+    @Override
+    boolean equals(Object other);
+
+    @Override
+    int hashCode();
 
     /**
      * Start building a new {@link Argument} with the specified
@@ -133,7 +183,7 @@ public interface Argument<T> {
         /**
          * Our option takes many arguments.
          */
-        VariableArgumentStartStep withManyArguments();
+        VariableArgumentStartStep withZeroOrMoreArguments();
     }
 
     // ------------------------------------------------------------------------
